@@ -90,7 +90,7 @@ def threadSecrets(threads, deldownloads, profile, sigs):
 
 def regexChecker(pattern, fileread):
     #print('regexChecker()')
-    returnvalue = re.finditer(b"%b" % pattern.encode(), fileread, re.MULTILINE | re.IGNORECASE)
+    returnvalue = re.finditer(pattern.encode(), fileread, re.MULTILINE | re.IGNORECASE)
     return returnvalue
 
 
