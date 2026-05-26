@@ -83,7 +83,8 @@ def logNotValidated(profile, output, context=None):
     filepath = './findings/notvalidated.json'
     submittedFile = os.path.isfile(filepath)
     if submittedFile:
-        subJSON = json.load(open(filepath))
+        with open(filepath) as f:
+            subJSON = json.load(f)
         subJSON['unvalidated'].append(context)
     else:
         subJSON = {'unvalidated':[context]}
@@ -98,7 +99,8 @@ def seenBefore(secret, profile, output):
     filepath = './findings/notvalidated.json'
     nonSubmittedFile = os.path.isfile(filepath)
     if nonSubmittedFile:
-        subJSON = json.load(open(filepath))
+        with open(filepath) as f:
+            subJSON = json.load(f)
         for sub in subJSON['unvalidated']:
             if sub['sha2'] == sha256(secret.encode('utf-8')).hexdigest():
                 seen = True
@@ -109,7 +111,8 @@ def seenBefore(secret, profile, output):
     filepath = './findings/obvfalsepositive.json'
     obvfalsepositiveFile = os.path.isfile(filepath)
     if obvfalsepositiveFile:
-        subJSON = json.load(open(filepath))
+        with open(filepath) as f:
+            subJSON = json.load(f)
         for sub in subJSON['obvfalsepositive']:
             if sub['sha2'] == sha256(secret.encode('utf-8')).hexdigest():
                 seen = True
@@ -120,7 +123,8 @@ def seenBefore(secret, profile, output):
     filepath = './findings/expiredJWT.json'
     expiredFile = os.path.isfile(filepath)
     if expiredFile:
-        subJSON = json.load(open(filepath))
+        with open(filepath) as f:
+            subJSON = json.load(f)
         for sub in subJSON['expired']:
             if sub['sha2'] == sha256(secret.encode('utf-8')).hexdigest():
                 seen = True

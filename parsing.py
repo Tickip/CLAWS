@@ -63,7 +63,8 @@ def getSigs():
             if sigfile.startswith('sig_'):
                 #pull in all sig files from the signature dir
                 sigfilePath =  os.path.join(os.path.dirname(os.path.realpath(__file__)), "signatures/" + sigfile)
-                jsonSigs = json.load(open(sigfilePath))
+                with open(sigfilePath) as f:
+                    jsonSigs = json.load(f)
                 for sigType in jsonSigs[0]["sigs"]:
                     sigs.append(sigType)
         except Exception as e:
