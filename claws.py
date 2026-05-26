@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import argparse
 import subprocess
@@ -141,11 +142,19 @@ def lootDirCheck(profile, ec2, lambduh, ssm):
             os.mkdir("./loot/" + profile + "/env")
 
 
+def _is_valid_account_id(account_id):
+    return bool(re.fullmatch(r'\d{12}', account_id))
+
 # Put in here how to ingest whatever or wherever your list is.
 def getAccounts():
     accounts = []
-    for account in open('./accounts.txt').readlines():
-        accounts.append(account.strip('\n'))
+    with open('./accounts.txt') as f:
+        for line in f:
+            account = line.strip()
+            if _is_valid_account_id(account):
+                accounts.append(account)
+            elif account:
+                print(f"Skipping invalid account ID: {account!r}")
     return accounts
 
 
@@ -155,7 +164,8 @@ def trackCheck(profileID):
     trackFile = os.path.exists(f'./track/{profileID}.json')
     if trackFile:
         try:
-            jsonTrack = json.load(open(f'./track/{profileID}.json'))
+            with open(f'./track/{profileID}.json') as f:
+                jsonTrack = json.load(f)
             return jsonTrack
         except Exception as e:
             print("Something went wrong and we can't load the track file. (./track.json)" + str(e))
@@ -231,5 +241,7 @@ def awsProfileSetup(profileID, region, threads, deldownloads, getversions, ec2, 
 
 if __name__ == "__main__":
     args = parse_args()
-    
+    if args.profile is not None and not _is_valid_account_id(args.profile):
+        print(f"Error: profile must be a 12-digit AWS account ID, got: {args.profile!r}")
+        raise SystemExit(1)
     main(args.region, args.threads, args.deldownloads, args.versions, args.hunt, args.ec2, args.lambduh, args.ssm, args.role, profile=args.profile)

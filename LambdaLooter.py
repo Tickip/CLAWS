@@ -9,7 +9,7 @@ import shutil
 import boto3
 import requests
 from pprint import pprint
-from time import gmtime, strftime
+from time import gmtime, strftime, sleep
 from datetime import datetime, timedelta
 
 
@@ -87,29 +87,78 @@ def zipEnvironmentVariableFiles(profile, deldownloads):
     print(f'Number Environment Variables Zipped: {counter}')
 
 
+def downloadLayers(profile, func_details, lambda_client):
+    layers = func_details['Configuration'].get('Layers', [])
+    for layer in layers:
+        layer_arn = layer['Arn']
+        # ARN format: arn:aws:lambda:region:account:layer:name:version
+        parts = layer_arn.split(':')
+        layer_name = parts[6]
+        layer_version = parts[7]
+        layer_path = "./loot/" + profile + "/lambda/layer-" + layer_name + "-version-" + layer_version + ".zip"
+        if os.path.exists(layer_path):
+            continue
+        try:
+            layer_details = lambda_client.get_layer_version_by_arn(Arn=layer_arn)
+            url = layer_details['Content']['Location']
+            r = requests.get(url)
+            if r.status_code == 200:
+                with open(layer_path, "wb") as f:
+                    f.write(r.content)
+            else:
+                with open('./logs/failures.log', 'a') as log:
+                    log.write(f"Failed to download layer, {profile}, {layer_arn}, HTTP {r.status_code}\n")
+        except Exception as e:
+            with open('./logs/failures.log', 'a') as log:
+                log.write(f"Failed to get layer, {profile}, {layer_arn}, {str(e)}\n")
+
+
 def downloadExecution(profile, strFunction, lambda_client):
     """
     execute the download of the lambdas function(s) and Envionrment Varilables
-    Variables - 
+    Variables -
     profile: the AWS Profile we are looting
-    lambda_client: lambda client object for downloading. 
+    lambda_client: lambda client object for downloading.
     strFunction: arn of the lambda to download
     profile: the AWS profile lambdas are downloaded from
     """
 
     func_details = lambda_client.get_function(FunctionName=strFunction)
-    downloadDir = "./loot/" + profile + "/lambda/lambda-" + func_details['Configuration']['FunctionName']  + "-version-" + func_details['Configuration']['Version'] + ".zip" 
-    url = func_details['Code']['Location']
-    
-    r = requests.get(url)
-    with open(downloadDir, "wb") as code:
-        code.write(r.content)
-    
-    saveEnvFilePath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "loot/" + profile + "/env/lambda-env_"+ func_details['Configuration']['FunctionName'] + "-"  + func_details['Configuration']['Version'] + "-environmentVariables-loot.txt")
-    env_details = lambda_client.get_function_configuration(FunctionName=strFunction)    
-    details = env_details['Environment']['Variables']
-    with open(saveEnvFilePath, 'a') as outputfile:
-        outputfile.write(details + "\n")
+    func_name = func_details['Configuration']['FunctionName']
+    func_version = func_details['Configuration']['Version']
+    repo_type = func_details['Code'].get('RepositoryType', 'S3')
+
+    # Environment variables are available for all Lambda types.
+    saveEnvFilePath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "loot/" + profile + "/env/lambda-env_" + func_name + "-" + func_version + "-environmentVariables-loot.txt")
+    env_details = lambda_client.get_function_configuration(FunctionName=strFunction)
+    variables = env_details.get('Environment', {}).get('Variables', {})
+    if variables:
+        with open(saveEnvFilePath, 'a') as outputfile:
+            outputfile.write(json.dumps(variables) + "\n")
+
+    if repo_type == 'ECR':
+        image_uri = func_details['Code'].get('ImageUri', 'unknown')
+        with open('./logs/ecr_functions.log', 'a') as log:
+            log.write(f"{profile}, {func_name}, {func_version}, {image_uri}\n")
+        return
+
+    downloadLayers(profile, func_details, lambda_client)
+
+    downloadDir = "./loot/" + profile + "/lambda/lambda-" + func_name + "-version-" + func_version + ".zip"
+    for attempt in range(3):
+        if attempt > 0:
+            # Re-fetch to get a fresh presigned URL — previous one may have expired
+            func_details = lambda_client.get_function(FunctionName=strFunction)
+            sleep(2 ** attempt)
+        url = func_details['Code']['Location']
+        r = requests.get(url)
+        if r.status_code == 200:
+            with open(downloadDir, "wb") as code:
+                code.write(r.content)
+            break
+    else:
+        with open('./logs/failures.log', 'a') as code:
+            code.write(f"Failed to download after retries, {profile}, {strFunction}, HTTP {r.status_code}\n")
 
 def checkVersions(profile, strFunction, lambda_client, getversions):
     """

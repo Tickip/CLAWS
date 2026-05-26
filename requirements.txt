@@ -1,0 +1,4 @@
+boto3
+msal
+python-dateutil
+requests
