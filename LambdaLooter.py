@@ -106,10 +106,11 @@ def downloadExecution(profile, strFunction, lambda_client):
         code.write(r.content)
     
     saveEnvFilePath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "loot/" + profile + "/env/lambda-env_"+ func_details['Configuration']['FunctionName'] + "-"  + func_details['Configuration']['Version'] + "-environmentVariables-loot.txt")
-    env_details = lambda_client.get_function_configuration(FunctionName=strFunction)    
-    details = env_details['Environment']['Variables']
-    with open(saveEnvFilePath, 'a') as outputfile:
-        outputfile.write(details + "\n")
+    env_details = lambda_client.get_function_configuration(FunctionName=strFunction)
+    variables = env_details.get('Environment', {}).get('Variables', {})
+    if variables:
+        with open(saveEnvFilePath, 'a') as outputfile:
+            outputfile.write(json.dumps(variables) + "\n")
 
 def checkVersions(profile, strFunction, lambda_client, getversions):
     """
