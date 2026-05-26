@@ -90,27 +90,37 @@ def zipEnvironmentVariableFiles(profile, deldownloads):
 def downloadExecution(profile, strFunction, lambda_client):
     """
     execute the download of the lambdas function(s) and Envionrment Varilables
-    Variables - 
+    Variables -
     profile: the AWS Profile we are looting
-    lambda_client: lambda client object for downloading. 
+    lambda_client: lambda client object for downloading.
     strFunction: arn of the lambda to download
     profile: the AWS profile lambdas are downloaded from
     """
 
     func_details = lambda_client.get_function(FunctionName=strFunction)
-    downloadDir = "./loot/" + profile + "/lambda/lambda-" + func_details['Configuration']['FunctionName']  + "-version-" + func_details['Configuration']['Version'] + ".zip" 
-    url = func_details['Code']['Location']
-    
-    r = requests.get(url)
-    with open(downloadDir, "wb") as code:
-        code.write(r.content)
-    
-    saveEnvFilePath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "loot/" + profile + "/env/lambda-env_"+ func_details['Configuration']['FunctionName'] + "-"  + func_details['Configuration']['Version'] + "-environmentVariables-loot.txt")
+    func_name = func_details['Configuration']['FunctionName']
+    func_version = func_details['Configuration']['Version']
+    repo_type = func_details['Code'].get('RepositoryType', 'S3')
+
+    # Environment variables are available for all Lambda types.
+    saveEnvFilePath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "loot/" + profile + "/env/lambda-env_" + func_name + "-" + func_version + "-environmentVariables-loot.txt")
     env_details = lambda_client.get_function_configuration(FunctionName=strFunction)
     variables = env_details.get('Environment', {}).get('Variables', {})
     if variables:
         with open(saveEnvFilePath, 'a') as outputfile:
             outputfile.write(json.dumps(variables) + "\n")
+
+    if repo_type == 'ECR':
+        image_uri = func_details['Code'].get('ImageUri', 'unknown')
+        with open('./logs/ecr_functions.log', 'a') as log:
+            log.write(f"{profile}, {func_name}, {func_version}, {image_uri}\n")
+        return
+
+    downloadDir = "./loot/" + profile + "/lambda/lambda-" + func_name + "-version-" + func_version + ".zip"
+    url = func_details['Code']['Location']
+    r = requests.get(url)
+    with open(downloadDir, "wb") as code:
+        code.write(r.content)
 
 def checkVersions(profile, strFunction, lambda_client, getversions):
     """
